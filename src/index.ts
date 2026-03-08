@@ -4,10 +4,10 @@ export { VpdStage };
 export type {
   VpdRange,
   VpdResult,
-  ChartDataPoint,
-  TempUnit,
-  ChartDataOptions,
   VpdThresholds,
+  ChartDataPoint,
+  ChartDataOptions,
+  ChartData,
 } from "./types.js";
 
 export {
@@ -17,5 +17,4 @@ export {
   getVpdThresholds,
 } from "./vpd.js";
 
-export type { ChartData } from "./chart-data.js";
 export { generateChartData } from "./chart-data.js";

@@ -1,5 +1,3 @@
-import type { VpdStage } from "./types.ts";
-
 /**
  * Plant growth stages for VPD calculations
  */
@@ -12,47 +10,52 @@ export enum VpdStage {
 /**
  * Classification of VPD value relative to ideal ranges
  */
-export type VpdRange = "low" | "ideal" | "high";
+export type VpdRange = "low" | "optimal" | "high";
 
 /**
  * Result of VPD calculation with classification
  */
 export interface VpdResult {
   /** Calculated vapor pressure deficit in kilopascals */
-  readonly calculatedVpd: number;
-  /** Classification relative to ideal ranges */
-  readonly classification: VpdRange;
-}
-
-/**
- * Single data point in the VPD matrix chart
- */
-export interface ChartDataPoint {
-  readonly temperature: number;
-  readonly humidity: number;
   readonly vpd: number;
-}
-
-/** Temperature measurement unit for chart data generation */
-export type TempUnit = "C" | "F";
-
-/**
- * Configuration options for generating VPD chart data
- */
-export interface ChartDataOptions {
-  /** Temperature range parameters [start, end, step] */
-  readonly tempRange: readonly [number, number, number];
-  /** Humidity range parameters [start, end, step] */
-  readonly humidityRange: readonly [number, number, number];
-  /** Temperature measurement unit */
-  readonly tempUnit: TempUnit;
+  /** Classification relative to stage-specific thresholds */
+  readonly range: VpdRange;
 }
 
 /**
- * Ideal VPD thresholds for each growth stage
+ * VPD thresholds for a growth stage
  */
 export interface VpdThresholds {
-  readonly [VpdStage.Propagation]: { readonly min: number; readonly max: number };
-  readonly [VpdStage.Veg]: { readonly min: number; readonly max: number };
-  readonly [VpdStage.Flower]: { readonly min: number; readonly max: number };
+  readonly low: number;
+  readonly high: number;
+}
+
+/**
+ * Single data point in the VPD chart matrix
+ */
+export interface ChartDataPoint {
+  readonly temperatureC: number;
+  readonly humidityPercent: number;
+  readonly vpd: number;
+  readonly range: VpdRange;
+}
+
+/**
+ * Configuration for generating VPD chart data
+ */
+export interface ChartDataOptions {
+  readonly stage: VpdStage;
+  readonly tempMinC: number;
+  readonly tempMaxC: number;
+  readonly tempStepC: number;
+  readonly humidityMin: number;
+  readonly humidityMax: number;
+  readonly humidityStep: number;
+}
+
+/**
+ * Generated chart data result
+ */
+export interface ChartData {
+  readonly points: readonly ChartDataPoint[];
 }

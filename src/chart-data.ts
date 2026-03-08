@@ -1,72 +1,67 @@
-import type { ChartDataOptions, ChartDataPoint, TempUnit, VpdThresholds } from './types';
-import { calculateVpd } from './calculator';
-
-function validateRange(range: readonly [number, number, number], name: string): void {
-  const [start, end, step] = range;
-  if (start > end) {
-    throw new RangeError(`${name} range start (${start}) must be ≤ end (${end})`);
-  }
-  if (step <= 0) {
-    throw new RangeError(`${name} step (${step}) must be > 0`);
-  }
-}
-
-function generateValues(start: number, end: number, step: number): number[] {
-  const values: number[] = [];
-  for (let value = start; value <= end + Number.EPSILON; value += step) {
-    values.push(Number(value.toFixed(2)));
-  }
-  return values;
-}
-
-function fahrenheitToCelsius(f: number): number {
-  return (f - 32) * 5 / 9;
-}
-
-export interface ChartData {
-  readonly dataMatrix: ChartDataPoint[][];
-  readonly tempUnit: TempUnit;
-  readonly thresholds: VpdThresholds;
-}
+import type { ChartDataOptions, ChartDataPoint, ChartData } from "./types.js";
+import { VpdStage } from "./types.js";
+import { calculateVpd } from "./vpd.js";
 
 /**
  * Generates temperature vs humidity VPD matrix for visualization.
- * @param options - Range configuration and measurement units
- * @param thresholds - Ideal VPD ranges for growth stages
- * @returns Structured chart data with original units and thresholds
- * @throws {RangeError} On invalid temperature/humidity ranges
- * @example
- * const data = generateChartData(
- *   { tempRange: [20, 30, 1], humidityRange: [50, 80, 5], tempUnit: 'C' },
- *   { propagation: { min: 0.8, max: 1.2 }, veg: { min: 1.0, max: 1.5 }, flower: { min: 1.2, max: 1.8 } }
- * );
+ * @param options - Range configuration for chart generation
+ * @returns Chart data with array of data points
+ * @throws {RangeError} On invalid temperature/humidity ranges or step values
+ * @throws {TypeError} On non-numeric inputs
  */
-export function generateChartData(
-  options: ChartDataOptions,
-  thresholds: VpdThresholds
-): ChartData {
-  validateRange(options.tempRange, 'Temperature');
-  validateRange(options.humidityRange, 'Humidity');
+export function generateChartData(options: ChartDataOptions): ChartData {
+  const { stage, tempMinC, tempMaxC, tempStepC, humidityMin, humidityMax, humidityStep } = options;
 
-  const temps = generateValues(...options.tempRange);
-  const humidities = generateValues(...options.humidityRange);
-
-  const dataMatrix: ChartDataPoint[][] = [];
-  for (const temp of temps) {
-    const row: ChartDataPoint[] = [];
-    const tempC = options.tempUnit === 'F' ? fahrenheitToCelsius(temp) : temp;
-
-    for (const humidity of humidities) {
-      const { calculatedVpd } = calculateVpd(tempC, humidity);
-      row.push({ temperature: temp, humidity, vpd: calculatedVpd });
-    }
-
-    dataMatrix.push(row);
+  if (typeof tempMinC !== "number" || !Number.isFinite(tempMinC)) {
+    throw new TypeError(`tempMinC must be a finite number, received: ${String(tempMinC)}`);
+  }
+  if (typeof tempMaxC !== "number" || !Number.isFinite(tempMaxC)) {
+    throw new TypeError(`tempMaxC must be a finite number, received: ${String(tempMaxC)}`);
+  }
+  if (typeof tempStepC !== "number" || !Number.isFinite(tempStepC)) {
+    throw new TypeError(`tempStepC must be a finite number, received: ${String(tempStepC)}`);
+  }
+  if (typeof humidityMin !== "number" || !Number.isFinite(humidityMin)) {
+    throw new TypeError(`humidityMin must be a finite number, received: ${String(humidityMin)}`);
+  }
+  if (typeof humidityMax !== "number" || !Number.isFinite(humidityMax)) {
+    throw new TypeError(`humidityMax must be a finite number, received: ${String(humidityMax)}`);
+  }
+  if (typeof humidityStep !== "number" || !Number.isFinite(humidityStep)) {
+    throw new TypeError(`humidityStep must be a finite number, received: ${String(humidityStep)}`);
   }
 
-  return {
-    dataMatrix,
-    tempUnit: options.tempUnit,
-    thresholds
-  };
+  if (tempMinC > tempMaxC) {
+    throw new RangeError(`tempMinC (${tempMinC}) must be ≤ tempMaxC (${tempMaxC})`);
+  }
+  if (humidityMin > humidityMax) {
+    throw new RangeError(`humidityMin (${humidityMin}) must be ≤ humidityMax (${humidityMax})`);
+  }
+  if (tempStepC <= 0) {
+    throw new RangeError(`tempStepC must be > 0, received: ${tempStepC}`);
+  }
+  if (humidityStep <= 0) {
+    throw new RangeError(`humidityStep must be > 0, received: ${humidityStep}`);
+  }
+  if (humidityMin < 0 || humidityMax > 100) {
+    throw new RangeError(`Humidity range must be within 0-100, received: ${humidityMin}-${humidityMax}`);
+  }
+
+  const points: ChartDataPoint[] = [];
+
+  for (let temp = tempMinC; temp <= tempMaxC + Number.EPSILON; temp += tempStepC) {
+    const t = Number(temp.toFixed(2));
+    for (let hum = humidityMin; hum <= humidityMax + Number.EPSILON; hum += humidityStep) {
+      const h = Number(hum.toFixed(2));
+      const result = calculateVpd(t, h, stage);
+      points.push({
+        temperatureC: t,
+        humidityPercent: h,
+        vpd: result.vpd,
+        range: result.range,
+      });
+    }
+  }
+
+  return { points };
 }

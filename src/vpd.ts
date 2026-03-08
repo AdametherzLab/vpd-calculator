@@ -1,11 +1,43 @@
-import type { VpdStage, VpdRange, VpdResult, VpdThresholds } from './types';
+import { VpdStage } from "./types.js";
+import type { VpdRange, VpdResult, VpdThresholds } from "./types.js";
+
+/** Valid VpdStage values for runtime validation */
+const VALID_STAGES = new Set<string>([
+  VpdStage.Propagation,
+  VpdStage.Veg,
+  VpdStage.Flower,
+]);
 
 /** Ideal VPD thresholds (kPa) for each growth stage */
-export const STAGE_THRESHOLDS: VpdThresholds = {
-  [VpdStage.Propagation]: { min: 0.4, max: 0.8 },
-  [VpdStage.Veg]: { min: 0.8, max: 1.2 },
-  [VpdStage.Flower]: { min: 1.2, max: 1.6 }
+export const STAGE_THRESHOLDS: Record<VpdStage, VpdThresholds> = {
+  [VpdStage.Propagation]: { low: 0.8, high: 1.0 },
+  [VpdStage.Veg]: { low: 1.0, high: 1.5 },
+  [VpdStage.Flower]: { low: 1.2, high: 1.8 },
 } as const;
+
+/**
+ * Validate that a value is a finite number
+ * @throws {TypeError} If value is not a finite number
+ */
+function assertFiniteNumber(value: unknown, name: string): asserts value is number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new TypeError(
+      `${name} must be a finite number, received: ${String(value)} (${typeof value})`
+    );
+  }
+}
+
+/**
+ * Validate that a stage is a valid VpdStage enum value
+ * @throws {TypeError} If stage is not a valid VpdStage
+ */
+function assertValidStage(stage: unknown): asserts stage is VpdStage {
+  if (typeof stage !== "string" || !VALID_STAGES.has(stage)) {
+    throw new TypeError(
+      `Invalid growth stage: ${String(stage)}. Must be one of: ${[...VALID_STAGES].join(", ")}`
+    );
+  }
+}
 
 function calculateSaturationVaporPressure(temperature: number): number {
   if (temperature > 0) {
@@ -14,43 +46,43 @@ function calculateSaturationVaporPressure(temperature: number): number {
   return 0.61094 * Math.exp((22.587 * temperature) / (temperature + 273.86));
 }
 
-function calculateActualVaporPressure(saturationVp: number, humidity: number): number {
-  return saturationVp * (humidity / 100);
-}
-
 /**
  * Calculate vapor pressure deficit (VPD) from temperature and humidity
  * @param temperature - Ambient temperature in Celsius
  * @param humidity - Relative humidity percentage (0-100)
  * @param stage - Growth stage for threshold comparison
  * @returns VpdResult with calculated kPa and classification
- * @throws {TypeError} For non-numeric or infinite inputs
+ * @throws {TypeError} For non-numeric, NaN, or Infinity inputs
  * @throws {RangeError} If humidity outside 0-100 range
- * @example
- * const result = calculateVpd(25, 60, VpdStage.Veg);
+ * @throws {RangeError} If temperature outside -50 to 70°C range
  */
 export function calculateVpd(
   temperature: number,
   humidity: number,
   stage: VpdStage
 ): VpdResult {
-  if (typeof temperature !== 'number' || !Number.isFinite(temperature)) {
-    throw new TypeError(`Invalid temperature: ${temperature}. Must be finite number`);
-  }
-  if (typeof humidity !== 'number' || !Number.isFinite(humidity)) {
-    throw new TypeError(`Invalid humidity: ${humidity}. Must be finite number`);
-  }
+  assertFiniteNumber(temperature, "Temperature");
+  assertFiniteNumber(humidity, "Humidity");
+  assertValidStage(stage);
+
   if (humidity < 0 || humidity > 100) {
-    throw new RangeError(`Humidity must be 0-100%, received: ${humidity}`);
+    throw new RangeError(
+      `Humidity must be between 0 and 100, received: ${humidity}`
+    );
+  }
+  if (temperature < -50 || temperature > 70) {
+    throw new RangeError(
+      `Temperature must be between -50 and 70°C, received: ${temperature}`
+    );
   }
 
   const svp = calculateSaturationVaporPressure(temperature);
-  const avp = calculateActualVaporPressure(svp, humidity);
-  const calculatedVpd = Math.max(svp - avp, 0); // Prevent negative values from fp errors
+  const avp = svp * (humidity / 100);
+  const vpd = Math.max(svp - avp, 0);
 
   return {
-    calculatedVpd: Number(calculatedVpd.toFixed(3)), // Limit to 3 decimal places
-    classification: classifyVpdRange(calculatedVpd, stage)
+    vpd: Number(vpd.toFixed(3)),
+    range: classifyVpdRange(vpd, stage),
   };
 }
 
@@ -58,25 +90,27 @@ export function calculateVpd(
  * Classify VPD value against stage-specific thresholds
  * @param vpd - Calculated vapor pressure deficit in kPa
  * @param stage - Growth stage to compare against
- * @returns 'low' | 'ideal' | 'high' classification
- * @example
- * const status = classifyVpdRange(1.1, VpdStage.Veg);
+ * @returns 'low' | 'optimal' | 'high' classification
+ * @throws {TypeError} If vpd is not a finite number
+ * @throws {TypeError} If stage is not a valid VpdStage
  */
 export function classifyVpdRange(vpd: number, stage: VpdStage): VpdRange {
-  const { min, max } = STAGE_THRESHOLDS[stage];
-  
-  if (vpd < min) return 'low';
-  if (vpd > max) return 'high';
-  return 'ideal';
+  assertFiniteNumber(vpd, "VPD");
+  assertValidStage(stage);
+
+  const { low, high } = STAGE_THRESHOLDS[stage];
+  if (vpd < low) return "low";
+  if (vpd > high) return "high";
+  return "optimal";
 }
 
 /**
  * Retrieve ideal VPD thresholds for a growth stage
  * @param stage - Target growth stage
- * @returns Threshold object with min/max kPa values
- * @example
- * const { min, max } = getVpdThresholds(VpdStage.Flower);
+ * @returns Threshold object with low/high kPa values
+ * @throws {TypeError} If stage is not a valid VpdStage
  */
-export function getVpdThresholds(stage: VpdStage): { readonly min: number; readonly max: number } {
+export function getVpdThresholds(stage: VpdStage): VpdThresholds {
+  assertValidStage(stage);
   return STAGE_THRESHOLDS[stage];
 }
