@@ -1,5 +1,6 @@
 import { VpdStage } from "./types.js";
 import type { VpdRange, VpdResult, VpdThresholds } from "./types.js";
+import { getActiveVpdThresholds } from "./thresholds.js";
 
 /** Valid VpdStage values for runtime validation */
 const VALID_STAGES = new Set<string>([
@@ -8,7 +9,10 @@ const VALID_STAGES = new Set<string>([
   VpdStage.Flower,
 ]);
 
-/** Ideal VPD thresholds (kPa) for each growth stage */
+/**
+ * Ideal VPD thresholds (kPa) for each growth stage.
+ * @deprecated Use getVpdThresholds() to respect custom thresholds, or import DEFAULT_STAGE_THRESHOLDS from thresholds.js
+ */
 export const STAGE_THRESHOLDS: Record<VpdStage, VpdThresholds> = {
   [VpdStage.Propagation]: { low: 0.8, high: 1.0 },
   [VpdStage.Veg]: { low: 1.0, high: 1.5 },
@@ -98,19 +102,21 @@ export function classifyVpdRange(vpd: number, stage: VpdStage): VpdRange {
   assertFiniteNumber(vpd, "VPD");
   assertValidStage(stage);
 
-  const { low, high } = STAGE_THRESHOLDS[stage];
+  const { low, high } = getVpdThresholds(stage);
   if (vpd < low) return "low";
   if (vpd > high) return "high";
   return "optimal";
 }
 
 /**
- * Retrieve ideal VPD thresholds for a growth stage
+ * Retrieve ideal VPD thresholds for a growth stage.
+ * Returns custom thresholds if set, otherwise returns defaults.
+ *
  * @param stage - Target growth stage
  * @returns Threshold object with low/high kPa values
  * @throws {TypeError} If stage is not a valid VpdStage
  */
 export function getVpdThresholds(stage: VpdStage): VpdThresholds {
   assertValidStage(stage);
-  return STAGE_THRESHOLDS[stage];
+  return getActiveVpdThresholds(stage);
 }

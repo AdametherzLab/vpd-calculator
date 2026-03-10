@@ -1,7 +1,7 @@
 import { Chart, registerables } from 'chart.js';
 import { createCanvas } from 'canvas';
 import type { ChartData, ChartDataPoint, VpdRange, VpdStage } from './types.js';
-import { STAGE_THRESHOLDS } from './vpd.js';
+import { getVpdThresholds } from './vpd.js';
 
 Chart.register(...registerables);
 
@@ -57,11 +57,11 @@ export async function renderVpdChart(chartData: ChartData, options: ChartRenderO
     };
   });
 
-  const vpdThresholds = STAGE_THRESHOLDS[stage];
+  const vpdThresholds = getVpdThresholds(stage);
 
   // Add threshold lines
   datasets.push({
-    label: `Low VPD Threshold (${vpdThresholds.low} kPa)`, 
+    label: `Low VPD Threshold (${vpdThresholds.low} kPa)`,
     data: temperatures.map(t => ({ x: t, y: 0 })), // Placeholder, actual line will be drawn by plugin
     borderColor: 'rgba(255, 99, 132, 1)',
     borderWidth: 2,
@@ -73,7 +73,7 @@ export async function renderVpdChart(chartData: ChartData, options: ChartRenderO
   });
 
   datasets.push({
-    label: `High VPD Threshold (${vpdThresholds.high} kPa)`, 
+    label: `High VPD Threshold (${vpdThresholds.high} kPa)`,
     data: temperatures.map(t => ({ x: t, y: 0 })), // Placeholder
     borderColor: 'rgba(255, 205, 86, 1)',
     borderWidth: 2,

@@ -19,3 +19,13 @@ export {
 
 export { generateChartData } from "./chart-data.js";
 export { renderVpdChart } from "./chart-renderer.js";
+
+// New exports for customizable thresholds
+export {
+  setVpdThresholds,
+  resetVpdThresholds,
+  getActiveVpdThresholds,
+  hasCustomThresholds,
+  getAllActiveThresholds,
+  DEFAULT_STAGE_THRESHOLDS,
+} from "./thresholds.js";

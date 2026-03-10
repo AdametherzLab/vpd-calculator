@@ -1,6 +1,6 @@
 {
   "name": "@adametherzlab/vpd-calculator",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Vapor pressure deficit calculator for grow rooms with ideal range alerts",
   "type": "module",
   "main": "./dist/index.js",
