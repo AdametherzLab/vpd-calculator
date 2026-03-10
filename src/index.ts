@@ -18,3 +18,4 @@ export {
 } from "./vpd.js";
 
 export { generateChartData } from "./chart-data.js";
+export { renderVpdChart } from "./chart-renderer.js";
