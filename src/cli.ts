@@ -3,6 +3,7 @@ import { parseArgs } from "node:util";
 import { calculateVpd, classifyVpdRange, getVpdThresholds } from "./vpd.js";
 import { VpdStage } from "./types.js";
 import type { VpdRange } from "./types.js";
+import { startWebServer } from './web.js';
 
 const RANGE_ICONS: Record<VpdRange, string> = {
   low: "[LOW]",
@@ -17,25 +18,31 @@ const STAGE_NAMES: Record<VpdStage, string> = {
 };
 
 function printHelp(): void {
-  console.log(`vpd-calculator — Quick VPD lookup from your terminal
+  console.log(`vpd-calculator — Quick VPD lookup from your terminal or interactive web chart
 
 Usage:
   vpd-calc --temp <celsius> --rh <percent> [--stage <stage>] [--unit <kpa|psi>]
   vpd-calc -t <celsius> -r <percent> [-s <stage>] [-u <kpa|psi>]
+  vpd-calc --chart [--port <port>]
+  vpd-calc -h, --help
 
 Options:
-  -t, --temp     Air temperature in Celsius (required)
-  -r, --rh       Relative humidity 0-100 (required)
+  -t, --temp     Air temperature in Celsius (required for CLI calculation)
+  -r, --rh       Relative humidity 0-100 (required for CLI calculation)
   -s, --stage    Growth stage: propagation, veg, flower (default: veg)
   -u, --unit     Output unit: kpa or psi (default: kpa)
-  -a, --all      Show VPD for all growth stages
+  -a, --all      Show VPD for all growth stages (CLI only)
+  --chart        Start an interactive web chart server
+  --port         Port for the web chart server (default: 3000, with --chart)
   -h, --help     Show this help message
 
 Examples:
   vpd-calc --temp 25 --rh 60
   vpd-calc -t 28 -r 55 -s flower
   vpd-calc -t 22 -r 70 --all
-  vpd-calc -t 25 -r 60 -u psi`);
+  vpd-calc -t 25 -r 60 -u psi
+  vpd-calc --chart
+  vpd-calc --chart --port 8080`);
 }
 
 function parseStage(value: string): VpdStage {
@@ -71,6 +78,8 @@ export function run(args: string[]): void {
       stage: { type: "string", short: "s", default: "veg" },
       unit: { type: "string", short: "u", default: "kpa" },
       all: { type: "boolean", short: "a", default: false },
+      chart: { type: "boolean", default: false },
+      port: { type: "string" },
       help: { type: "boolean", short: "h", default: false },
     },
     strict: true,
@@ -81,8 +90,19 @@ export function run(args: string[]): void {
     return;
   }
 
+  if (values.chart) {
+    const port = values.port ? parseInt(values.port) : undefined;
+    if (port && (isNaN(port) || port < 1 || port > 65535)) {
+      console.error(`Error: Invalid port number: "${values.port}". Port must be between 1 and 65535.`);
+      process.exitCode = 1;
+      return;
+    }
+    startWebServer(port);
+    return;
+  }
+
   if (!values.temp || !values.rh) {
-    console.error("Error: --temp (-t) and --rh (-r) are required. Use --help for usage.");
+    console.error("Error: --temp (-t) and --rh (-r) are required for CLI calculation. Use --help for usage or --chart for web interface.");
     process.exitCode = 1;
     return;
   }

@@ -10,8 +10,9 @@
 - Growth stage specific classifications (propagation/veg/flower)
 - Chart-ready data matrix generation for visualization
 - **CLI tool** for quick VPD lookup from your terminal
+- **Interactive Web Chart** to dynamically adjust parameters and visualize VPD
 - Type-safe API with strict input validation
-- Zero dependencies - pure TypeScript implementation
+- Zero dependencies for core calculations - uses `chart.js` and `canvas` for chart rendering, `hono` for web server.
 
 ## Installation
 
@@ -32,91 +33,118 @@ vpd-calc --temp 25 --rh 60
 # Specify growth stage
 vpd-calc -t 28 -r 55 -s flower
 
-# Show all growth stages at once
+# Show all stages
 vpd-calc -t 22 -r 70 --all
 
-# Output in PSI instead of kPa
+# Output in PSI
 vpd-calc -t 25 -r 60 -u psi
 
-# Stage aliases: prop, veg, vegetative, flower, flowering, bloom
-vpd-calc -t 24 -r 65 -s bloom
+# Start the interactive web chart server
+vpd-calc --chart
+
+# Start the web chart server on a custom port
+vpd-calc --chart --port 8080
+
+# Get help
+vpd-calc --help
 
 
-Example output:
+## Interactive Web Chart
+
+To start the interactive web chart, run:
+
+bash
+vpd-calc --chart
 
 
-VPD Report — 25°C / 60% RH
-──────────────────────────────────────────────────
-  Vegetative:  1.268 kPa  [OK]  (optimal: 1.000 kPa – 1.500 kPa)
+Then, open your browser to `http://localhost:3000` (or the custom port you specified). You can adjust temperature and humidity ranges using sliders and immediately see the updated VPD chart.
+
+## Library Usage
 
 
-With `--all`:
+import { calculateVpd, VpdStage, generateChartData, renderVpdChart, setVpdThresholds } from 'vpd-calculator';
 
-
-VPD Report — 25°C / 60% RH
-──────────────────────────────────────────────────
-  Propagation:  1.268 kPa  [HIGH]  (optimal: 0.800 kPa – 1.000 kPa)
-  Vegetative:   1.268 kPa  [OK]    (optimal: 1.000 kPa – 1.500 kPa)
-  Flowering:    1.268 kPa  [OK]    (optimal: 1.200 kPa – 1.800 kPa)
-
-
-## API Usage
-
-
-import { VpdStage, calculateVpd, classifyVpdRange, getVpdThresholds, generateChartData } from '@adametherzlab/vpd-calculator';
-
-// Calculate VPD for vegetative stage at 25°C / 60% RH
+// 1. Calculate VPD for specific conditions
 const result = calculateVpd(25, 60, VpdStage.Veg);
-console.log(result); // { vpd: 1.268, range: 'optimal' }
+console.log(`VPD: ${result.vpd} kPa, Range: ${result.range}`);
+// Output: VPD: 1.268 kPa, Range: optimal
 
-// Get thresholds for a stage
-const thresholds = getVpdThresholds(VpdStage.Flower);
-console.log(thresholds); // { low: 1.2, high: 1.8 }
-
-// Generate chart data matrix
-const chart = generateChartData({
-  stage: VpdStage.Veg,
+// 2. Generate data for a chart
+const chartOptions = {
+  stage: VpdStage.Flower,
   tempMinC: 20,
   tempMaxC: 30,
-  tempStepC: 2,
+  tempStepC: 1,
   humidityMin: 40,
-  humidityMax: 80,
-  humidityStep: 10,
-});
-console.log(chart.points.length); // 30 data points
+  humidityMax: 70,
+  humidityStep: 5,
+};
+const chartData = generateChartData(chartOptions);
+console.log(`Generated ${chartData.points.length} data points for the chart.`);
+
+// 3. Render a chart to a PNG buffer (Node.js/Bun environment)
+async function createChartImage() {
+  const imageBuffer = await renderVpdChart(chartData, { stage: VpdStage.Flower, width: 800, height: 600 });
+  // imageBuffer is a Node.js Buffer containing PNG data
+  // You can save it to a file, send it as an HTTP response, etc.
+  // require('fs').writeFileSync('vpd_chart.png', imageBuffer);
+  console.log('Chart image generated.');
+}
+createChartImage();
+
+// 4. Customize VPD thresholds
+setVpdThresholds(VpdStage.Propagation, { low: 0.7, high: 0.9 });
+const customResult = calculateVpd(22, 75, VpdStage.Propagation);
+console.log(`Custom VPD for Propagation: ${customResult.vpd} kPa, Range: ${customResult.range}`);
+
+// Reset to default thresholds
+// resetVpdThresholds(VpdStage.Propagation);
 
 
-## API Reference
+## API
 
-### `calculateVpd(temperature, humidity, stage): VpdResult`
+### `calculateVpd(temperature: number, humidity: number, stage: VpdStage): VpdResult`
+Calculates the Vapor Pressure Deficit (VPD) in kilopascals (kPa) for given temperature and humidity, and classifies it based on the specified growth stage's thresholds.
 
-Calculate vapor pressure deficit from temperature and humidity.
+### `classifyVpdRange(vpd: number, stage: VpdStage): VpdRange`
+Classifies a given VPD value ('low', 'optimal', 'high') based on the thresholds for the specified growth stage.
 
-- `temperature` — Air temperature in Celsius (-50 to 70)
-- `humidity` — Relative humidity percentage (0-100)
-- `stage` — Growth stage (`VpdStage.Propagation | Veg | Flower`)
-- Returns `{ vpd: number, range: 'low' | 'optimal' | 'high' }`
+### `getVpdThresholds(stage: VpdStage): VpdThresholds`
+Retrieves the active VPD thresholds (low and high kPa values) for a given growth stage. Returns custom thresholds if set, otherwise defaults.
 
-### `classifyVpdRange(vpd, stage): VpdRange`
+### `setVpdThresholds(stage: VpdStage, thresholds: VpdThresholds): void`
+Sets custom VPD thresholds for a specific growth stage, overriding the defaults. These will be used in subsequent calculations and classifications.
 
-Classify a VPD value against stage-specific thresholds.
+### `resetVpdThresholds(stage?: VpdStage): void`
+Resets custom VPD thresholds for a specific stage to its default values. If no stage is provided, all custom thresholds are reset.
 
-### `getVpdThresholds(stage): VpdThresholds`
+### `generateChartData(options: ChartDataOptions): ChartData`
+Generates a matrix of VPD data points across specified temperature and humidity ranges, suitable for charting.
 
-Get the optimal VPD range for a growth stage.
+### `renderVpdChart(chartData: ChartData, options: ChartRenderOptions): Promise<Buffer>`
+(Node.js/Bun only) Renders the generated `ChartData` into a PNG image buffer using `chart.js` and `canvas`.
 
-### `generateChartData(options): ChartData`
+### Types
 
-Generate a temperature × humidity matrix of VPD values for visualization.
+- `VpdStage`: Enum for plant growth stages (`Propagation`, `Veg`, `Flower`).
+- `VpdRange`: Type for VPD classification (`'low'`, `'optimal'`, `'high'`).
+- `VpdResult`: Interface `{ vpd: number; range: VpdRange; }`.
+- `VpdThresholds`: Interface `{ low: number; high: number; }`.
+- `ChartDataPoint`: Interface `{ temperatureC: number; humidityPercent: number; vpd: number; range: VpdRange; }`.
+- `ChartDataOptions`: Interface for `generateChartData` options.
+- `ChartData`: Interface `{ points: readonly ChartDataPoint[]; }`.
+- `ChartRenderOptions`: Interface for `renderVpdChart` options.
 
-## Growth Stage Thresholds (kPa)
+## Development
 
-| Stage | Low | Optimal | High |
-|-------|-----|---------|------|
-| Propagation | < 0.8 | 0.8 – 1.0 | > 1.0 |
-| Vegetative | < 1.0 | 1.0 – 1.5 | > 1.5 |
-| Flowering | < 1.2 | 1.2 – 1.8 | > 1.8 |
+To run tests:
 
-## License
+bash
+bun test
 
-MIT
+
+To build:
+
+bash
+npm run build
+
